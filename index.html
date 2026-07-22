@@ -254,8 +254,29 @@
 
   .btn.rec { width: 100%; padding: 10px; }
   .btn.rec.on { background: var(--rec); border-color: var(--rec); color: #fff; }
+  .outRow { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
   .note { font-size: 11px; color: var(--muted); line-height: 1.6; margin: 10px 2px 8px; }
+  .keys { font-size: 10.5px; color: var(--muted); margin: 2px 2px 0; }
+  .keys b {
+    display: inline-block; min-width: 16px; text-align: center;
+    font-weight: 600; color: var(--text);
+    border: 1px solid var(--line); border-radius: 5px;
+    padding: 1px 4px; margin-right: 2px;
+    font-variant-numeric: tabular-nums;
+  }
   input[type=file] { display: none; }
+
+  /* stage buttons */
+  .stageBtns { position: absolute; right: 14px; bottom: 14px; z-index: 4; display: flex; gap: 8px; }
+  .sBtn {
+    width: 34px; height: 34px; border-radius: 50%; cursor: pointer;
+    border: 1px solid rgba(236, 238, 242, 0.25);
+    background: rgba(10, 11, 14, 0.45); color: #eceef2;
+    display: grid; place-items: center; font-size: 14px;
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    transition: border-color .2s, background .2s;
+  }
+  .sBtn:hover { border-color: var(--accent); }
 
   @media (max-width: 800px) {
     body { grid-template-columns: 1fr; grid-template-rows: 56px 46vh 1fr; }
@@ -278,6 +299,9 @@
   <canvas id="gl"></canvas>
   <div id="hud" class="mono">drop a video or image anywhere</div>
   <div id="recBadge"><i></i>REC</div>
+  <div class="stageBtns">
+    <button class="sBtn" id="fsBtn" title="Fullscreen (F)" aria-label="Toggle fullscreen">⛶</button>
+  </div>
 </div>
 
 <aside>
@@ -288,12 +312,20 @@
       <button class="btn" id="srcFile">File</button>
       <button class="btn" id="srcCam">Camera</button>
     </div>
+    <div class="srcRow" style="margin-top: 8px;">
+      <button class="btn" id="mirrorBtn" title="Flip horizontally">Mirror</button>
+      <button class="btn" id="fitBtn" title="Fit whole frame instead of filling">Contain</button>
+      <button class="btn" id="shotBtn" title="Save a PNG still (S)">Snapshot</button>
+    </div>
     <input type="file" id="filePick" accept="video/*,image/*">
   </section>
 
   <section>
     <h2 class="mono">Presets</h2>
     <div class="chips" id="presets"></div>
+    <div class="chips" style="margin-top: 8px;">
+      <button class="btn" id="shuffleBtn">⚡ Shuffle</button>
+    </div>
   </section>
 
   <section>
@@ -361,7 +393,12 @@
   <section>
     <h2 class="mono">Output</h2>
     <button class="btn rec" id="recBtn">● Record clip</button>
-    <p class="note">Records the filtered canvas to a .webm file. Load your clip, hit record, play it through, stop.</p>
+    <div class="outRow">
+      <button class="btn" id="linkBtn" title="Copy a URL that reproduces these settings">Copy settings link</button>
+      <button class="btn" id="resetBtn" title="Back to the Reference preset">Reset</button>
+    </div>
+    <p class="note">Records the filtered canvas to a video file (MP4 in Safari, WebM elsewhere). Snapshot saves a still. The settings link reproduces your exact look.</p>
+    <p class="keys"><b>Space</b> play/pause · <b>R</b> record · <b>S</b> snapshot · <b>F</b> fullscreen</p>
   </section>
 </aside>
 
@@ -390,6 +427,8 @@ uniform float uStagger, uJitter, uGlitch;
 uniform float uShape;   /* 0 pill, 1 round, 2 square */
 uniform float uHoriz;   /* 0 vertical, 1 horizontal  */
 uniform float uMode;    /* 0 tint, 1 duo, 2 rgb      */
+uniform float uFit;     /* 0 cover, 1 contain        */
+uniform float uMirror;  /* 0 off, 1 flip x           */
 uniform float uSat;
 uniform vec3  uColA, uColB;
 
@@ -422,9 +461,15 @@ vec2 srcUV(vec2 center){
   float cAsp = uRes.x / uRes.y;
   float vAsp = uTexRes.x / uTexRes.y;
   vec2 uv = center / uRes;
-  if (cAsp > vAsp) { uv.y = 0.5 + (uv.y - 0.5) * (vAsp / cAsp); }
-  else             { uv.x = 0.5 + (uv.x - 0.5) * (cAsp / vAsp); }
+  if (uFit < 0.5){  /* cover */
+    if (cAsp > vAsp) { uv.y = 0.5 + (uv.y - 0.5) * (vAsp / cAsp); }
+    else             { uv.x = 0.5 + (uv.x - 0.5) * (cAsp / vAsp); }
+  } else {          /* contain */
+    if (cAsp > vAsp) { uv.x = 0.5 + (uv.x - 0.5) * (cAsp / vAsp); }
+    else             { uv.y = 0.5 + (uv.y - 0.5) * (vAsp / cAsp); }
+  }
   uv.y = 1.0 - uv.y;
+  uv.x = mix(uv.x, 1.0 - uv.x, uMirror);
   return uv;
 }
 
@@ -467,6 +512,10 @@ void main(){
       uv.x += gActive * (hash12(vec2(cy, seed + 13.0)) - 0.5) * 0.25 * uGlitch;
 
       vec3 rgb = srcSample(uv);
+
+      /* contain mode: dots outside the frame go dark instead of edge-smearing */
+      float inb = step(0.0, uv.x) * step(uv.x, 1.0) * step(0.0, uv.y) * step(uv.y, 1.0);
+      rgb *= mix(1.0, inb, uFit);
 
       float l = dot(rgb, vec3(0.2126, 0.7152, 0.0722));
       l = pow(l, uGamma);
@@ -573,7 +622,8 @@ gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
 const UNIFORMS = ["uTex","uRes","uTexRes","uTime","uCell",
   "uContrast","uGamma","uExposure","uGlow","uBlack","uSoft","uVign",
   "uFlicker","uFlickSpeed","uScan","uScanSpeed","uGrain","uSizeResp",
-  "uStagger","uJitter","uGlitch","uShape","uHoriz","uMode","uSat","uColA","uColB"];
+  "uStagger","uJitter","uGlitch","uShape","uHoriz","uMode","uSat","uColA","uColB",
+  "uFit","uMirror"];
 const U = {};
 UNIFORMS.forEach(n => U[n] = gl.getUniformLocation(prog, n));
 
@@ -599,7 +649,7 @@ resize();
 
 /* ================= parameters / controls ================= */
 const params = {
-  uShape: 0, uHoriz: 0, uMode: 0,
+  uShape: 0, uHoriz: 0, uMode: 0, uFit: 0, uMirror: 0,
 };
 
 const sliderEls = {};
@@ -651,6 +701,16 @@ buildSeg("segShape", ["Pill", "Round", "Square"], "uShape");
 buildSeg("segAxis",  ["Vertical", "Horizontal"], "uHoriz");
 buildSeg("segMode",  ["Tint", "Duo", "RGB"], "uMode", updateSatState);
 updateSatState();
+
+/* fit + mirror toggles */
+const mirrorBtn = document.getElementById("mirrorBtn");
+const fitBtn = document.getElementById("fitBtn");
+function setToggle(btn, key, v){
+  params[key] = v ? 1 : 0;
+  btn.classList.toggle("active", !!v);
+}
+mirrorBtn.addEventListener("click", () => setToggle(mirrorBtn, "uMirror", !params.uMirror));
+fitBtn.addEventListener("click", () => setToggle(fitBtn, "uFit", !params.uFit));
 
 /* ---------- color ---------- */
 const TINTS = [
@@ -736,6 +796,78 @@ function applyPreset(name){
   presetWrap.querySelectorAll(".btn").forEach(x =>
     x.classList.toggle("active", x.textContent === name));
 }
+document.getElementById("resetBtn").addEventListener("click", () => applyPreset("Reference"));
+
+/* ---------- shuffle: a random look that still reads well ---------- */
+const rnd = (a, b) => a + Math.random() * (b - a);
+const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+document.getElementById("shuffleBtn").addEventListener("click", () => {
+  const shape = Math.floor(rnd(0, 3));
+  setSeg("segShape", "uShape", shape);
+  setSeg("segAxis", "uHoriz", Math.random() < 0.3 ? 1 : 0);
+  setSeg("segMode", "uMode", Math.floor(rnd(0, 3)));
+  setTintByName(pick(TINTS)[0]);
+  setSlider("uCellW", Math.round(rnd(7, 26)));
+  setSlider("uCellH", Math.round(rnd(12, 40)));
+  setSlider("uSizeResp", rnd(0.4, 0.95).toFixed(2));
+  setSlider("uStagger", Math.random() < 0.35 ? 0.5 : 0);
+  setSlider("uJitter", (Math.random() < 0.25 ? rnd(0.05, 0.3) : 0).toFixed(2));
+  setSlider("uContrast", rnd(1.3, 2.4).toFixed(2));
+  setSlider("uGamma", rnd(0.9, 1.4).toFixed(2));
+  setSlider("uExposure", rnd(1.2, 2.0).toFixed(2));
+  setSlider("uBlack", rnd(0, 0.12).toFixed(2));
+  setSlider("uSoft", rnd(0, 0.5).toFixed(2));
+  setSlider("uGlow", rnd(0, 0.8).toFixed(2));
+  setSlider("uVign", (Math.random() < 0.4 ? rnd(0.1, 0.4) : 0).toFixed(2));
+  setSlider("uFlicker", rnd(0.1, 0.6).toFixed(2));
+  setSlider("uFlickSpeed", rnd(3, 12).toFixed(1));
+  setSlider("uScan", (Math.random() < 0.6 ? rnd(0.2, 1.0) : 0).toFixed(2));
+  setSlider("uScanSpeed", rnd(-1.5, 1.5).toFixed(2));
+  setSlider("uGlitch", (Math.random() < 0.3 ? rnd(0.1, 0.5) : 0).toFixed(2));
+  setSlider("uGrain", rnd(0.02, 0.08).toFixed(3));
+  setSlider("uSat", rnd(0.8, 1.5).toFixed(2));
+  presetWrap.querySelectorAll(".btn").forEach(x => x.classList.remove("active"));
+});
+
+/* ---------- shareable settings link ---------- */
+const linkBtn = document.getElementById("linkBtn");
+function stateToHash(){
+  const s = { p: {}, a: pickA.value, b: pickB.value };
+  Object.keys(params).forEach(k => s.p[k] = params[k]);
+  return btoa(JSON.stringify(s));
+}
+function applyHash(){
+  if (!location.hash || location.hash.length < 2) return;
+  try {
+    const s = JSON.parse(atob(location.hash.slice(1)));
+    if (!s || !s.p) return;
+    Object.keys(s.p).forEach(k => {
+      if (sliderEls[k]) setSlider(k, s.p[k]);
+    });
+    if ("uShape" in s.p) setSeg("segShape", "uShape", s.p.uShape);
+    if ("uHoriz" in s.p) setSeg("segAxis", "uHoriz", s.p.uHoriz);
+    if ("uMode" in s.p)  setSeg("segMode", "uMode", s.p.uMode);
+    if ("uFit" in s.p)    setToggle(fitBtn, "uFit", s.p.uFit);
+    if ("uMirror" in s.p) setToggle(mirrorBtn, "uMirror", s.p.uMirror);
+    if (s.a && s.b){
+      pickA.value = s.a; pickB.value = s.b;
+      tintA = hex2rgb(s.a); tintB = hex2rgb(s.b);
+      tintWrap.querySelectorAll(".tint").forEach(x => x.classList.remove("active"));
+    }
+    presetWrap.querySelectorAll(".btn").forEach(x => x.classList.remove("active"));
+  } catch (e) { /* malformed hash: ignore */ }
+}
+linkBtn.addEventListener("click", () => {
+  const url = location.origin + location.pathname + "#" + stateToHash();
+  history.replaceState(null, "", "#" + stateToHash());
+  const done = ok => {
+    linkBtn.textContent = ok ? "Copied ✓" : "Link in address bar";
+    setTimeout(() => linkBtn.textContent = "Copy settings link", 1600);
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText)
+    navigator.clipboard.writeText(url).then(() => done(true), () => done(false));
+  else done(false);
+});
 
 /* ================= sources ================= */
 const statusTxt = document.getElementById("statusTxt");
@@ -824,6 +956,7 @@ function loadFile(f){
       source = { kind: "video", el: video, w: 0, h: 0 };
       setActive("file");
       statusTxt.textContent = f.name.toLowerCase();
+      hud.textContent = "click stage to pause";
     }).catch(err => {
       statusTxt.textContent = "could not play file";
       console.error(err);
@@ -861,22 +994,24 @@ const recBtn = document.getElementById("recBtn");
 const recBadge = document.getElementById("recBadge");
 let recorder = null, chunks = [];
 
-recBtn.addEventListener("click", () => {
+const REC_MIMES = ["video/mp4;codecs=avc1", "video/mp4", "video/webm;codecs=vp9", "video/webm"];
+const recMime = (window.MediaRecorder && REC_MIMES.find(m => MediaRecorder.isTypeSupported(m))) || "video/webm";
+const recExt = recMime.startsWith("video/mp4") ? "mp4" : "webm";
+
+function toggleRecord(){
   if (recorder && recorder.state === "recording"){
     recorder.stop();
     return;
   }
   const stream = canvas.captureStream(60);
-  const mime = MediaRecorder.isTypeSupported("video/webm;codecs=vp9")
-             ? "video/webm;codecs=vp9" : "video/webm";
-  recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 12_000_000 });
+  recorder = new MediaRecorder(stream, { mimeType: recMime, videoBitsPerSecond: 12_000_000 });
   chunks = [];
   recorder.ondataavailable = e => e.data.size && chunks.push(e.data);
   recorder.onstop = () => {
-    const blob = new Blob(chunks, { type: "video/webm" });
+    const blob = new Blob(chunks, { type: recMime.split(";")[0] });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = "pillgrid-" + Date.now() + ".webm";
+    a.download = "pillgrid-" + Date.now() + "." + recExt;
     a.click();
     recBtn.textContent = "● Record clip";
     recBtn.classList.remove("on");
@@ -886,6 +1021,62 @@ recBtn.addEventListener("click", () => {
   recBtn.textContent = "■ Stop & save";
   recBtn.classList.add("on");
   recBadge.classList.add("on");
+}
+recBtn.addEventListener("click", toggleRecord);
+
+/* ---------- snapshot ---------- */
+let wantShot = false;
+document.getElementById("shotBtn").addEventListener("click", () => wantShot = true);
+function saveShot(){
+  const w = canvas.width, h = canvas.height;
+  const px = new Uint8Array(w * h * 4);
+  gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px);
+  const c = document.createElement("canvas");
+  c.width = w; c.height = h;
+  const ctx = c.getContext("2d");
+  const img = ctx.createImageData(w, h);
+  for (let y = 0; y < h; y++)      /* GL rows are bottom-up */
+    img.data.set(px.subarray((h - 1 - y) * w * 4, (h - y) * w * 4), y * w * 4);
+  ctx.putImageData(img, 0, 0);
+  c.toBlob(b => {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(b);
+    a.download = "pillgrid-" + Date.now() + ".png";
+    a.click();
+  }, "image/png");
+}
+
+/* ---------- play / pause ---------- */
+const hud = document.getElementById("hud");
+function togglePlay(){
+  if (!source || source.kind !== "video") return;
+  if (video.paused){ video.play(); hud.textContent = ""; }
+  else { video.pause(); hud.textContent = "paused — click or press space to play"; }
+}
+stage.addEventListener("click", e => {
+  if (e.target.closest(".sBtn")) return;
+  togglePlay();
+});
+
+/* ---------- fullscreen ---------- */
+const fsBtn = document.getElementById("fsBtn");
+function toggleFullscreen(){
+  if (document.fullscreenElement) document.exitFullscreen();
+  else if (stage.requestFullscreen) stage.requestFullscreen();
+}
+fsBtn.addEventListener("click", toggleFullscreen);
+document.addEventListener("fullscreenchange", resize);
+
+/* ---------- keyboard ---------- */
+document.addEventListener("keydown", e => {
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const tag = (e.target.tagName || "").toLowerCase();
+  if (tag === "input" || tag === "textarea" || tag === "select") return;
+  const k = e.key.toLowerCase();
+  if (k === " "){ e.preventDefault(); togglePlay(); }
+  else if (k === "r") toggleRecord();
+  else if (k === "s") wantShot = true;
+  else if (k === "f") toggleFullscreen();
 });
 
 /* ================= render loop ================= */
@@ -922,16 +1113,19 @@ function frame(now){
   gl.uniform2f(U.uCell, params.uCellW * DPR, params.uCellH * DPR);
   ["uContrast","uGamma","uExposure","uGlow","uBlack","uSoft","uVign",
    "uFlicker","uFlickSpeed","uScan","uScanSpeed","uGrain","uSizeResp",
-   "uStagger","uJitter","uGlitch","uShape","uHoriz","uMode","uSat"]
+   "uStagger","uJitter","uGlitch","uShape","uHoriz","uMode","uSat",
+   "uFit","uMirror"]
     .forEach(k => gl.uniform1f(U[k], params[k]));
   gl.uniform3fv(U.uColA, tintA);
   gl.uniform3fv(U.uColB, tintB);
 
   gl.drawArrays(gl.TRIANGLES, 0, 3);
+  if (wantShot){ wantShot = false; saveShot(); }
   requestAnimationFrame(frame);
 }
 
 useDemo();
+applyHash();
 requestAnimationFrame(frame);
 </script>
 </body>
