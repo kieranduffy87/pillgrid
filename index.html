@@ -1,0 +1,938 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pillgrid — LED Matrix Video Filter · KD</title>
+<link rel="icon" href='data:image/svg+xml,<svg viewBox="0 0 18.62 11.73" xmlns="http://www.w3.org/2000/svg"><polygon fill="%230339f8" points="18.62 0 12 0 6 5.86 12 11.73 18.62 11.73 12.62 5.86 18.62 0"/><polygon fill="%23eceef2" points="0 0 0 11.72 6 5.86 0 0"/></svg>'>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* ============================================================
+     Pillgrid — a KD tool.
+     Brand: KD mark, #0339F8 electric blue, Instrument Sans.
+     Dark-surface build of the KD editorial system.
+     ============================================================ */
+  :root {
+    --accent: #0339f8;
+    --bg: #08090b;
+    --text: #eceef2;
+    --muted: #8f939d;
+    --line: rgba(236, 238, 242, 0.13);
+    --surface: #101216;
+    --surface-2: #16181d;
+    --pill-bg: rgba(14, 16, 20, 0.7);
+    --rec: #ff4d5e;
+    --radius: 18px;
+    --radius-sm: 14px;
+    --sans: "Instrument Sans", "Helvetica Neue", Arial, sans-serif;
+    --ease: cubic-bezier(0.22, 0.7, 0.2, 1);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 13px;
+    -webkit-font-smoothing: antialiased;
+    display: grid;
+    grid-template-columns: 1fr 324px;
+    grid-template-rows: 56px 1fr;
+    overflow: hidden;
+  }
+  ::selection { background: var(--accent); color: #fff; }
+  .mono {
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  /* ---------- header ---------- */
+  header {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 0 20px;
+    border-bottom: 1px solid var(--line);
+    background: var(--bg);
+  }
+  .kd-mark { height: 16px; width: auto; display: block; }
+  .kd-mark .ink { fill: var(--text); }
+  header h1 {
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  header .sub { margin-top: 1px; }
+  header .status {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--pill-bg);
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .pip {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 10px rgba(3, 57, 248, 0.9);
+    animation: pip 2.4s ease-in-out infinite;
+  }
+  @keyframes pip { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
+
+  /* ---------- viewport ---------- */
+  #stage { position: relative; background: #0b0c0f; overflow: hidden; }
+  #stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  #stage.dragging::after {
+    content: "DROP VIDEO / IMAGE";
+    position: absolute; inset: 16px;
+    display: flex; align-items: center; justify-content: center;
+    border: 1px dashed var(--accent);
+    border-radius: var(--radius);
+    background: rgba(3, 57, 248, 0.12);
+    color: #fff;
+    font-weight: 600;
+    letter-spacing: .3em;
+    font-size: 12px;
+    z-index: 5;
+  }
+  #hud {
+    position: absolute; left: 18px; bottom: 16px; z-index: 3;
+    pointer-events: none;
+    text-shadow: 0 1px 6px #000;
+  }
+  #recBadge {
+    position: absolute; right: 18px; top: 16px; z-index: 3;
+    display: none; align-items: center; gap: 8px;
+    padding: 6px 14px;
+    border-radius: 999px;
+    background: rgba(20, 8, 10, 0.75);
+    border: 1px solid rgba(255, 77, 94, 0.4);
+    font-size: 0.68rem; font-weight: 700; letter-spacing: .2em; color: var(--rec);
+  }
+  #recBadge.on { display: flex; }
+  #recBadge i {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--rec); box-shadow: 0 0 10px var(--rec);
+    animation: pip 1s steps(2) infinite;
+  }
+
+  /* ---------- panel ---------- */
+  aside {
+    border-left: 1px solid var(--line);
+    background: var(--bg);
+    overflow-y: auto;
+    padding-bottom: 28px;
+  }
+  aside::-webkit-scrollbar { width: 4px; }
+  aside::-webkit-scrollbar-thumb { background: var(--line); border-radius: 2px; }
+  section { padding: 18px 18px 8px; }
+  section + section { border-top: 1px solid var(--line); }
+  h2 { margin-bottom: 14px; }
+
+  /* buttons */
+  .btn {
+    appearance: none;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    padding: 8px 10px;
+    cursor: pointer;
+    transition: border-color .18s var(--ease), color .18s, background .18s, box-shadow .18s;
+  }
+  .btn:hover { border-color: var(--accent); color: #fff; }
+  .btn.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+  .srcRow { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+
+  /* preset chips */
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chips .btn { padding: 7px 13px; }
+
+  /* segmented */
+  .segRow { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; gap: 10px; }
+  .segRow > span { flex: 0 0 auto; }
+  .seg {
+    display: flex;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    overflow: hidden;
+    background: var(--surface);
+  }
+  .seg button {
+    appearance: none; border: none; background: transparent;
+    color: var(--muted);
+    font-family: var(--sans); font-size: 10.5px; font-weight: 600;
+    letter-spacing: 0.04em;
+    padding: 6px 11px;
+    cursor: pointer;
+    transition: background .18s, color .18s;
+  }
+  .seg button.active { background: var(--accent); color: #fff; }
+
+  /* sliders */
+  .ctl { margin-bottom: 12px; }
+  .ctl.off { opacity: 0.35; pointer-events: none; }
+  .ctl label {
+    display: flex; justify-content: space-between; align-items: baseline;
+    margin-bottom: 4px;
+  }
+  .ctl label span { font-size: 11.5px; font-weight: 500; color: var(--muted); }
+  .ctl label output {
+    font-size: 11.5px; font-weight: 600; color: var(--text);
+    font-variant-numeric: tabular-nums;
+  }
+  input[type=range] {
+    -webkit-appearance: none;
+    width: 100%; height: 18px;
+    background: transparent;
+    cursor: pointer;
+  }
+  input[type=range]::-webkit-slider-runnable-track {
+    height: 3px; border-radius: 2px;
+    background: linear-gradient(90deg, var(--accent) var(--fill, 50%), var(--line) var(--fill, 50%));
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 13px; height: 13px; border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
+    margin-top: -5px;
+  }
+  input[type=range]::-moz-range-track { height: 3px; background: var(--line); }
+  input[type=range]::-moz-range-thumb {
+    width: 13px; height: 13px; border: none; border-radius: 50%;
+    background: #fff; box-shadow: 0 1px 6px rgba(0,0,0,.6);
+  }
+
+  /* tints */
+  .tints { display: grid; grid-template-columns: repeat(6, 1fr); gap: 7px; margin-bottom: 12px; }
+  .tint {
+    height: 30px; cursor: pointer;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    transition: border-color .15s, box-shadow .15s;
+  }
+  .tint:hover { border-color: var(--muted); }
+  .tint.active { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(3, 57, 248, 0.35); }
+  .customRow { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+  .customRow label {
+    display: flex; align-items: center; gap: 8px;
+    border: 1px solid var(--line); border-radius: 999px;
+    background: var(--surface);
+    padding: 5px 10px;
+    font-size: 10.5px; font-weight: 600; color: var(--muted);
+    cursor: pointer;
+  }
+  .customRow input[type=color] {
+    appearance: none; -webkit-appearance: none;
+    width: 20px; height: 20px; border: none; border-radius: 50%;
+    background: none; cursor: pointer; padding: 0;
+  }
+  .customRow input[type=color]::-webkit-color-swatch-wrapper { padding: 0; }
+  .customRow input[type=color]::-webkit-color-swatch { border: 1px solid var(--line); border-radius: 50%; }
+
+  .btn.rec { width: 100%; padding: 10px; }
+  .btn.rec.on { background: var(--rec); border-color: var(--rec); color: #fff; }
+  .note { font-size: 11px; color: var(--muted); line-height: 1.6; margin: 10px 2px 8px; }
+  input[type=file] { display: none; }
+
+  @media (max-width: 800px) {
+    body { grid-template-columns: 1fr; grid-template-rows: 56px 46vh 1fr; }
+    aside { border-left: none; border-top: 1px solid var(--line); }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <svg class="kd-mark" viewBox="0 0 18.62 11.73" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><polygon fill="#0339f8" points="18.62 0 12 0 6 5.86 12 11.73 18.62 11.73 12.62 5.86 18.62 0"/><polygon class="ink" points="0 0 0 11.72 6 5.86 0 0"/></svg>
+  <div>
+    <h1>Pillgrid</h1>
+    <div class="sub mono">LED matrix video filter</div>
+  </div>
+  <div class="status"><span class="pip"></span><span id="statusTxt">demo signal</span></div>
+</header>
+
+<div id="stage">
+  <canvas id="gl"></canvas>
+  <div id="hud" class="mono">drop a video or image anywhere</div>
+  <div id="recBadge"><i></i>REC</div>
+</div>
+
+<aside>
+  <section>
+    <h2 class="mono">Source</h2>
+    <div class="srcRow">
+      <button class="btn active" id="srcDemo">Demo</button>
+      <button class="btn" id="srcFile">File</button>
+      <button class="btn" id="srcCam">Camera</button>
+    </div>
+    <input type="file" id="filePick" accept="video/*,image/*">
+  </section>
+
+  <section>
+    <h2 class="mono">Presets</h2>
+    <div class="chips" id="presets"></div>
+  </section>
+
+  <section>
+    <h2 class="mono">Matrix</h2>
+    <div class="segRow"><span class="mono">Shape</span><div class="seg" id="segShape"></div></div>
+    <div class="segRow"><span class="mono">Axis</span><div class="seg" id="segAxis"></div></div>
+    <div class="ctl"><label><span>Dot pitch</span><output>10</output></label>
+      <input type="range" id="uCellW" min="6" max="40" step="1" value="10"></div>
+    <div class="ctl"><label><span>Dot length</span><output>16</output></label>
+      <input type="range" id="uCellH" min="10" max="64" step="1" value="16"></div>
+    <div class="ctl"><label><span>Size response</span><output>0.80</output></label>
+      <input type="range" id="uSizeResp" min="0" max="0.95" step="0.01" value="0.80"></div>
+    <div class="ctl"><label><span>Stagger</span><output>0.00</output></label>
+      <input type="range" id="uStagger" min="0" max="1" step="0.01" value="0"></div>
+    <div class="ctl"><label><span>Jitter</span><output>0.00</output></label>
+      <input type="range" id="uJitter" min="0" max="1" step="0.01" value="0"></div>
+  </section>
+
+  <section>
+    <h2 class="mono">Signal</h2>
+    <div class="ctl"><label><span>Contrast</span><output>1.70</output></label>
+      <input type="range" id="uContrast" min="0.5" max="3.5" step="0.01" value="1.70"></div>
+    <div class="ctl"><label><span>Gamma</span><output>1.10</output></label>
+      <input type="range" id="uGamma" min="0.4" max="2.2" step="0.01" value="1.10"></div>
+    <div class="ctl"><label><span>Exposure</span><output>1.60</output></label>
+      <input type="range" id="uExposure" min="0.6" max="2.8" step="0.01" value="1.60"></div>
+    <div class="ctl"><label><span>Black point</span><output>0.05</output></label>
+      <input type="range" id="uBlack" min="0" max="0.5" step="0.01" value="0.05"></div>
+    <div class="ctl"><label><span>Softness</span><output>0.15</output></label>
+      <input type="range" id="uSoft" min="0" max="1" step="0.01" value="0.15"></div>
+    <div class="ctl"><label><span>Bloom</span><output>0.25</output></label>
+      <input type="range" id="uGlow" min="0" max="1" step="0.01" value="0.25"></div>
+    <div class="ctl"><label><span>Vignette</span><output>0.00</output></label>
+      <input type="range" id="uVign" min="0" max="1" step="0.01" value="0"></div>
+  </section>
+
+  <section>
+    <h2 class="mono">Motion</h2>
+    <div class="ctl"><label><span>Flicker</span><output>0.35</output></label>
+      <input type="range" id="uFlicker" min="0" max="1" step="0.01" value="0.35"></div>
+    <div class="ctl"><label><span>Flicker speed</span><output>6.0</output></label>
+      <input type="range" id="uFlickSpeed" min="0" max="20" step="0.1" value="6"></div>
+    <div class="ctl"><label><span>Scan wave</span><output>0.45</output></label>
+      <input type="range" id="uScan" min="0" max="1.5" step="0.01" value="0.45"></div>
+    <div class="ctl"><label><span>Scan speed</span><output>0.60</output></label>
+      <input type="range" id="uScanSpeed" min="-3" max="3" step="0.01" value="0.60"></div>
+    <div class="ctl"><label><span>Glitch</span><output>0.00</output></label>
+      <input type="range" id="uGlitch" min="0" max="1" step="0.01" value="0"></div>
+    <div class="ctl"><label><span>Grain</span><output>0.04</output></label>
+      <input type="range" id="uGrain" min="0" max="0.15" step="0.005" value="0.04"></div>
+  </section>
+
+  <section>
+    <h2 class="mono">Color</h2>
+    <div class="segRow"><span class="mono">Mode</span><div class="seg" id="segMode"></div></div>
+    <div class="ctl" id="satCtl"><label><span>Saturation</span><output>1.10</output></label>
+      <input type="range" id="uSat" min="0" max="2" step="0.01" value="1.10"></div>
+    <div class="tints" id="tints"></div>
+    <div class="customRow">
+      <label>Dim <input type="color" id="pickA" value="#a38fe0"></label>
+      <label>Bright <input type="color" id="pickB" value="#faf5ff"></label>
+    </div>
+  </section>
+
+  <section>
+    <h2 class="mono">Output</h2>
+    <button class="btn rec" id="recBtn">● Record clip</button>
+    <p class="note">Records the filtered canvas to a .webm file. Load your clip, hit record, play it through, stop.</p>
+  </section>
+</aside>
+
+<script>
+"use strict";
+
+/* ================= WebGL setup ================= */
+const canvas = document.getElementById("gl");
+const gl = canvas.getContext("webgl", { antialias: false, preserveDrawingBuffer: false });
+
+const VERT = `
+attribute vec2 aPos;
+void main(){ gl_Position = vec4(aPos, 0.0, 1.0); }
+`;
+
+const FRAG = `
+precision highp float;
+uniform sampler2D uTex;
+uniform vec2  uRes;
+uniform vec2  uTexRes;
+uniform float uTime;
+uniform vec2  uCell;
+uniform float uContrast, uGamma, uExposure, uGlow, uBlack, uSoft, uVign;
+uniform float uFlicker, uFlickSpeed, uScan, uScanSpeed, uGrain, uSizeResp;
+uniform float uStagger, uJitter, uGlitch;
+uniform float uShape;   /* 0 pill, 1 round, 2 square */
+uniform float uHoriz;   /* 0 vertical, 1 horizontal  */
+uniform float uMode;    /* 0 tint, 1 duo, 2 rgb      */
+uniform float uSat;
+uniform vec3  uColA, uColB;
+
+float hash12(vec2 p){
+  p = fract(p * vec2(123.34, 345.45));
+  p += dot(p, p + 34.345);
+  return fract(p.x * p.y);
+}
+
+float flickerNoise(vec2 cell, float t){
+  float phase = hash12(cell) * 43.0;
+  float tt = t + phase;
+  float i = floor(tt), f = fract(tt);
+  float a = hash12(cell + i);
+  float b = hash12(cell + i + 1.0);
+  return mix(a, b, f * f * (3.0 - 2.0 * f));
+}
+
+float sdPill(vec2 p, float halfLen, float r){
+  p.y = max(abs(p.y) - halfLen, 0.0);
+  return length(p) - r;
+}
+
+float sdRBox(vec2 p, vec2 b, float rr){
+  vec2 q = abs(p) - b + rr;
+  return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - rr;
+}
+
+vec2 srcUV(vec2 center){
+  float cAsp = uRes.x / uRes.y;
+  float vAsp = uTexRes.x / uTexRes.y;
+  vec2 uv = center / uRes;
+  if (cAsp > vAsp) { uv.y = 0.5 + (uv.y - 0.5) * (vAsp / cAsp); }
+  else             { uv.x = 0.5 + (uv.x - 0.5) * (cAsp / vAsp); }
+  uv.y = 1.0 - uv.y;
+  return uv;
+}
+
+vec3 srcSample(vec2 uv){
+  vec3 s = texture2D(uTex, clamp(uv, 0.0, 1.0)).rgb;
+  if (uSoft < 0.01) return s;
+  vec2 o = uSoft * uCell * 1.2 / uRes;
+  s *= 0.4;
+  s += texture2D(uTex, clamp(uv + vec2( o.x,  o.y), 0.0, 1.0)).rgb * 0.15;
+  s += texture2D(uTex, clamp(uv + vec2(-o.x,  o.y), 0.0, 1.0)).rgb * 0.15;
+  s += texture2D(uTex, clamp(uv + vec2( o.x, -o.y), 0.0, 1.0)).rgb * 0.15;
+  s += texture2D(uTex, clamp(uv + vec2(-o.x, -o.y), 0.0, 1.0)).rgb * 0.15;
+  return s;
+}
+
+void main(){
+  vec2 px = gl_FragCoord.xy;
+  float col0 = floor(px.x / uCell.x);
+  vec3 acc = vec3(0.0);
+
+  for (int dx = -1; dx <= 1; dx++){
+    float cx = col0 + float(dx);
+    float offY = uStagger * uCell.y * 0.5 * mod(abs(cx), 2.0);
+    float row0 = floor((px.y - offY) / uCell.y);
+
+    for (int dy = -1; dy <= 1; dy++){
+      float cy = row0 + float(dy);
+      vec2 c = vec2(cx, cy);
+      vec2 center = vec2((cx + 0.5) * uCell.x, (cy + 0.5) * uCell.y + offY);
+
+      /* stable per-dot placement jitter */
+      center += (vec2(hash12(c * 1.37 + 7.0), hash12(c * 2.71 + 3.0)) - 0.5)
+                * uCell * uJitter * 0.5;
+
+      /* glitch: whole rows briefly shift and pop */
+      vec2 uv = srcUV(center);
+      float seed = floor(uTime * 9.0);
+      float gr = hash12(vec2(cy, seed));
+      float gActive = step(1.0 - uGlitch * 0.3, gr) * step(0.001, uGlitch);
+      uv.x += gActive * (hash12(vec2(cy, seed + 13.0)) - 0.5) * 0.25 * uGlitch;
+
+      vec3 rgb = srcSample(uv);
+
+      float l = dot(rgb, vec3(0.2126, 0.7152, 0.0722));
+      l = pow(l, uGamma);
+      l = clamp((l - 0.5) * uContrast + 0.5, 0.0, 1.0);
+      l = smoothstep(uBlack, 1.0, l);
+
+      /* vignette */
+      vec2 vd = center / uRes - 0.5;
+      l *= 1.0 - uVign * smoothstep(0.25, 0.71, length(vd));
+
+      /* per-dot asynchronous flicker */
+      float fl = flickerNoise(c, uTime * uFlickSpeed);
+      l *= 1.0 - uFlicker * 0.35 * fl;
+
+      /* rare shimmer sparkle */
+      float sp = hash12(c + floor(uTime * 3.0));
+      l += step(0.996, sp) * 0.4 * l;
+
+      /* glitched rows pop bright */
+      l *= 1.0 + gActive * 0.5 * uGlitch;
+
+      /* vertical scanning wave (sign of speed sets direction) */
+      float yn = 1.0 - center.y / uRes.y;
+      float scanPos = fract(uTime * uScanSpeed * 0.14);
+      float dW = abs(yn - scanPos);
+      dW = min(dW, 1.0 - dW);
+      l *= 1.0 + uScan * step(0.001, abs(uScanSpeed)) * exp(-dW * dW / 0.0016);
+      l = clamp(l, 0.0, 1.5);
+
+      /* geometry — luminance drives dot SIZE, brightness stays fairly flat */
+      vec2 p = px - center;
+      float szf = mix(1.0 - uSizeResp, 1.0, smoothstep(0.0, 1.0, l));
+      float d;
+      if (uShape < 0.5){
+        if (uHoriz < 0.5){
+          float r  = uCell.x * 0.34 * szf;
+          float hl = max(uCell.y * 0.5 - uCell.x * 0.34 - uCell.y * 0.14, 0.0) * szf;
+          d = sdPill(p, hl, r);
+        } else {
+          float r  = uCell.y * 0.34 * szf;
+          float hl = max(uCell.x * 0.5 - uCell.y * 0.34 - uCell.x * 0.14, 0.0) * szf;
+          d = sdPill(p.yx, hl, r);
+        }
+      } else if (uShape < 1.5){
+        float r = min(uCell.x, uCell.y) * 0.36 * szf;
+        d = length(p) - r;
+      } else {
+        vec2 bb = uCell * 0.36 * szf;
+        d = sdRBox(p, bb, min(2.0, min(bb.x, bb.y) * 0.4));
+      }
+
+      float core = 1.0 - smoothstep(-0.75, 0.75, d);
+      float glow = exp(-max(d, 0.0) * mix(1.4, 0.22, uGlow)) * uGlow * 0.65;
+      float b = mix(0.25, 1.0, pow(l, 0.7));
+
+      vec3 tint;
+      if (uMode < 0.5){
+        tint = mix(uColA, uColB, pow(l, 4.0));
+      } else if (uMode < 1.5){
+        tint = mix(uColA, uColB, smoothstep(0.30, 0.70, l));
+      } else {
+        float ml = max(max(rgb.r, rgb.g), rgb.b) + 1e-4;
+        tint = clamp(mix(vec3(1.0), rgb / ml, uSat), 0.0, 1.0);
+      }
+
+      acc += (core + glow) * b * tint;
+    }
+  }
+
+  vec3 col = vec3(1.0) - exp(-acc * uExposure);
+  col += vec3(0.055, 0.055, 0.066);   /* charcoal panel floor, not pure black */
+
+  /* digital grain */
+  float g = hash12(px + fract(uTime) * vec2(17.13, 9.71)) - 0.5;
+  col += g * uGrain;
+
+  gl_FragColor = vec4(max(col, 0.0), 1.0);
+}
+`;
+
+function makeShader(type, src){
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src);
+  gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS))
+    throw new Error(gl.getShaderInfoLog(s));
+  return s;
+}
+const prog = gl.createProgram();
+gl.attachShader(prog, makeShader(gl.VERTEX_SHADER, VERT));
+gl.attachShader(prog, makeShader(gl.FRAGMENT_SHADER, FRAG));
+gl.linkProgram(prog);
+if (!gl.getProgramParameter(prog, gl.LINK_STATUS))
+  throw new Error(gl.getProgramInfoLog(prog));
+gl.useProgram(prog);
+
+const buf = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
+const aPos = gl.getAttribLocation(prog, "aPos");
+gl.enableVertexAttribArray(aPos);
+gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+
+const UNIFORMS = ["uTex","uRes","uTexRes","uTime","uCell",
+  "uContrast","uGamma","uExposure","uGlow","uBlack","uSoft","uVign",
+  "uFlicker","uFlickSpeed","uScan","uScanSpeed","uGrain","uSizeResp",
+  "uStagger","uJitter","uGlitch","uShape","uHoriz","uMode","uSat","uColA","uColB"];
+const U = {};
+UNIFORMS.forEach(n => U[n] = gl.getUniformLocation(prog, n));
+
+const tex = gl.createTexture();
+gl.bindTexture(gl.TEXTURE_2D, tex);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE,
+              new Uint8Array([0, 0, 0, 255]));
+gl.uniform1i(U.uTex, 0);
+
+const DPR = Math.min(window.devicePixelRatio || 1, 2);
+function resize(){
+  const r = canvas.parentElement.getBoundingClientRect();
+  canvas.width  = Math.round(r.width  * DPR);
+  canvas.height = Math.round(r.height * DPR);
+  gl.viewport(0, 0, canvas.width, canvas.height);
+}
+window.addEventListener("resize", resize);
+resize();
+
+/* ================= parameters / controls ================= */
+const params = {
+  uShape: 0, uHoriz: 0, uMode: 0,
+};
+
+const sliderEls = {};
+document.querySelectorAll("input[type=range]").forEach(el => {
+  sliderEls[el.id] = el;
+  const out = el.closest(".ctl").querySelector("output");
+  const paint = () => {
+    const pct = (el.value - el.min) / (el.max - el.min) * 100;
+    el.style.setProperty("--fill", pct + "%");
+    out.textContent = (+el.step >= 1) ? el.value
+                    : (+el.step >= 0.1) ? (+el.value).toFixed(1)
+                    : (+el.value).toFixed(2);
+  };
+  el.addEventListener("input", () => { params[el.id] = +el.value; paint(); });
+  params[el.id] = +el.value;   // sync in case the browser restored a previous position
+  paint();
+});
+function setSlider(id, v){
+  const el = sliderEls[id];
+  el.value = v;
+  el.dispatchEvent(new Event("input"));
+}
+
+/* segmented controls */
+function buildSeg(containerId, labels, key, onChange){
+  const wrap = document.getElementById(containerId);
+  labels.forEach((txt, i) => {
+    const b = document.createElement("button");
+    b.textContent = txt;
+    if (i === params[key]) b.classList.add("active");
+    b.addEventListener("click", () => {
+      params[key] = i;
+      wrap.querySelectorAll("button").forEach(x => x.classList.remove("active"));
+      b.classList.add("active");
+      if (onChange) onChange(i);
+    });
+    wrap.appendChild(b);
+  });
+}
+function setSeg(containerId, key, i){
+  const wrap = document.getElementById(containerId);
+  params[key] = i;
+  wrap.querySelectorAll("button").forEach((x, n) => x.classList.toggle("active", n === i));
+  if (containerId === "segMode") updateSatState();
+}
+const satCtl = document.getElementById("satCtl");
+function updateSatState(){ satCtl.classList.toggle("off", params.uMode !== 2); }
+buildSeg("segShape", ["Pill", "Round", "Square"], "uShape");
+buildSeg("segAxis",  ["Vertical", "Horizontal"], "uHoriz");
+buildSeg("segMode",  ["Tint", "Duo", "RGB"], "uMode", updateSatState);
+updateSatState();
+
+/* ---------- color ---------- */
+const TINTS = [
+  ["Lavender", [0.64, 0.56, 0.88], [0.98, 0.96, 1.00]],
+  ["KD Blue",  [0.01, 0.22, 0.97], [0.90, 0.95, 1.00]],
+  ["Ice",      [0.36, 0.62, 0.95], [0.92, 0.98, 1.00]],
+  ["Amber",    [0.95, 0.56, 0.18], [1.00, 0.95, 0.82]],
+  ["Crimson",  [0.90, 0.18, 0.32], [1.00, 0.90, 0.90]],
+  ["Mono",     [0.75, 0.75, 0.78], [1.00, 1.00, 1.00]],
+];
+let tintA = TINTS[0][1].slice(), tintB = TINTS[0][2].slice();
+const pickA = document.getElementById("pickA");
+const pickB = document.getElementById("pickB");
+const css = v => "#" + v.map(x => Math.round(x * 255).toString(16).padStart(2, "0")).join("");
+const hex2rgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255);
+
+const tintWrap = document.getElementById("tints");
+function setTintByName(name){
+  const idx = TINTS.findIndex(t => t[0] === name);
+  if (idx < 0) return;
+  tintA = TINTS[idx][1].slice(); tintB = TINTS[idx][2].slice();
+  pickA.value = css(tintA); pickB.value = css(tintB);
+  tintWrap.querySelectorAll(".tint").forEach((x, n) => x.classList.toggle("active", n === idx));
+}
+TINTS.forEach((t, i) => {
+  const b = document.createElement("div");
+  b.className = "tint" + (i === 0 ? " active" : "");
+  b.title = t[0];
+  b.style.background = `linear-gradient(135deg, ${css(t[2])} 0%, ${css(t[1])} 100%)`;
+  b.addEventListener("click", () => setTintByName(t[0]));
+  tintWrap.appendChild(b);
+});
+pickA.value = css(tintA); pickB.value = css(tintB);
+[pickA, pickB].forEach(p => p.addEventListener("input", () => {
+  tintA = hex2rgb(pickA.value); tintB = hex2rgb(pickB.value);
+  tintWrap.querySelectorAll(".tint").forEach(x => x.classList.remove("active"));
+}));
+
+/* ---------- presets ---------- */
+const PRESETS = {
+  Reference: { uCellW:10, uCellH:16, uSizeResp:0.80, uStagger:0, uJitter:0,
+    uContrast:1.70, uGamma:1.10, uExposure:1.60, uBlack:0.05, uSoft:0.15, uGlow:0.25, uVign:0,
+    uFlicker:0.35, uFlickSpeed:6, uScan:0.45, uScanSpeed:0.60, uGlitch:0, uGrain:0.04, uSat:1.10,
+    uShape:0, uHoriz:0, uMode:0, tint:"Lavender" },
+  Billboard: { uCellW:16, uCellH:28, uSizeResp:0.50, uStagger:0, uJitter:0,
+    uContrast:1.90, uGamma:1.05, uExposure:1.50, uBlack:0.06, uSoft:0.20, uGlow:0.60, uVign:0.15,
+    uFlicker:0.30, uFlickSpeed:5, uScan:0.80, uScanSpeed:0.80, uGlitch:0, uGrain:0.03, uSat:1.10,
+    uShape:0, uHoriz:0, uMode:0, tint:"KD Blue" },
+  OLED: { uCellW:7, uCellH:12, uSizeResp:0.90, uStagger:0, uJitter:0,
+    uContrast:2.20, uGamma:1.00, uExposure:1.70, uBlack:0.12, uSoft:0, uGlow:0.15, uVign:0,
+    uFlicker:0.25, uFlickSpeed:8, uScan:0.20, uScanSpeed:0.40, uGlitch:0, uGrain:0.02, uSat:1.30,
+    uShape:1, uHoriz:0, uMode:2, tint:"Mono" },
+  Broadcast: { uCellW:26, uCellH:12, uSizeResp:0.60, uStagger:0.5, uJitter:0,
+    uContrast:1.80, uGamma:1.10, uExposure:1.55, uBlack:0.05, uSoft:0.25, uGlow:0.35, uVign:0.10,
+    uFlicker:0.50, uFlickSpeed:9, uScan:0.90, uScanSpeed:1.40, uGlitch:0.60, uGrain:0.06, uSat:1.10,
+    uShape:0, uHoriz:1, uMode:1, tint:"Ice" },
+  Ghost: { uCellW:12, uCellH:30, uSizeResp:0.30, uStagger:0, uJitter:0.15,
+    uContrast:1.20, uGamma:1.40, uExposure:1.10, uBlack:0.02, uSoft:0.80, uGlow:0.90, uVign:0.45,
+    uFlicker:0.15, uFlickSpeed:3, uScan:0.25, uScanSpeed:0.30, uGlitch:0, uGrain:0.03, uSat:1.00,
+    uShape:0, uHoriz:0, uMode:0, tint:"Mono" },
+  Brutal: { uCellW:14, uCellH:14, uSizeResp:0.95, uStagger:0, uJitter:0,
+    uContrast:2.60, uGamma:1.00, uExposure:1.80, uBlack:0.15, uSoft:0, uGlow:0, uVign:0,
+    uFlicker:0.50, uFlickSpeed:12, uScan:0, uScanSpeed:0, uGlitch:0.25, uGrain:0.08, uSat:1.00,
+    uShape:2, uHoriz:0, uMode:0, tint:"Mono" },
+};
+const presetWrap = document.getElementById("presets");
+Object.keys(PRESETS).forEach((name, i) => {
+  const b = document.createElement("button");
+  b.className = "btn" + (i === 0 ? " active" : "");
+  b.textContent = name;
+  b.addEventListener("click", () => applyPreset(name));
+  presetWrap.appendChild(b);
+});
+function applyPreset(name){
+  const p = PRESETS[name];
+  Object.keys(p).forEach(k => {
+    if (k === "tint") setTintByName(p[k]);
+    else if (k === "uShape") setSeg("segShape", "uShape", p[k]);
+    else if (k === "uHoriz") setSeg("segAxis", "uHoriz", p[k]);
+    else if (k === "uMode")  setSeg("segMode", "uMode", p[k]);
+    else if (sliderEls[k])   setSlider(k, p[k]);
+  });
+  presetWrap.querySelectorAll(".btn").forEach(x =>
+    x.classList.toggle("active", x.textContent === name));
+}
+
+/* ================= sources ================= */
+const statusTxt = document.getElementById("statusTxt");
+const stage = document.getElementById("stage");
+const btns = { demo: srcDemo, file: srcFile, cam: srcCam };
+let source = null;
+let camStream = null;
+
+function setActive(kind){
+  Object.values(btns).forEach(b => b.classList.remove("active"));
+  ({ demo: btns.demo, file: btns.file, cam: btns.cam })[kind].classList.add("active");
+}
+function stopCam(){
+  if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; }
+}
+
+/* --- demo signal: animated abstract "portrait" drawn on a 2D canvas --- */
+const demo = document.createElement("canvas");
+demo.width = 960; demo.height = 540;
+const dctx = demo.getContext("2d");
+function drawDemo(t){
+  const w = demo.width, h = demo.height;
+  dctx.fillStyle = "#000";
+  dctx.fillRect(0, 0, w, h);
+
+  const cx = w / 2 + Math.sin(t * 0.4) * 40;
+  const cy = h / 2 + Math.cos(t * 0.3) * 24;
+
+  let g = dctx.createRadialGradient(cx, cy, 20, cx, cy, 300);
+  g.addColorStop(0, "rgba(255,255,255,0.95)");
+  g.addColorStop(0.35, "rgba(200,200,210,0.55)");
+  g.addColorStop(1, "rgba(0,0,0,0)");
+  dctx.fillStyle = g;
+  dctx.beginPath(); dctx.ellipse(cx, cy, 220, 280, 0, 0, 7); dctx.fill();
+
+  for (let i = 0; i < 3; i++){
+    const a = t * (0.5 + i * 0.23) + i * 2.1;
+    const ox = cx + Math.cos(a) * (160 + i * 60);
+    const oy = cy + Math.sin(a * 0.8) * (110 + i * 30);
+    g = dctx.createRadialGradient(ox, oy, 4, ox, oy, 90);
+    g.addColorStop(0, "rgba(255,255,255,0.9)");
+    g.addColorStop(1, "rgba(0,0,0,0)");
+    dctx.fillStyle = g;
+    dctx.beginPath(); dctx.arc(ox, oy, 90, 0, 7); dctx.fill();
+  }
+
+  dctx.strokeStyle = "rgba(255,255,255,0.5)";
+  dctx.lineWidth = 10;
+  dctx.beginPath();
+  dctx.arc(cx, cy, 250, t * 0.7, t * 0.7 + 1.8);
+  dctx.stroke();
+}
+
+function useDemo(){
+  stopCam();
+  source = { kind: "demo", el: demo, w: demo.width, h: demo.height };
+  setActive("demo");
+  statusTxt.textContent = "demo signal";
+}
+
+/* --- file (video or image) --- */
+const video = document.createElement("video");
+video.muted = true; video.loop = true; video.playsInline = true;
+video.crossOrigin = "anonymous";
+
+const filePick = document.getElementById("filePick");
+btns.file.addEventListener("click", () => filePick.click());
+filePick.addEventListener("change", () => loadFile(filePick.files[0]));
+
+function loadFile(f){
+  if (!f) return;
+  stopCam();
+  const url = URL.createObjectURL(f);
+  if (f.type.startsWith("image/")){
+    const img = new Image();
+    img.onload = () => {
+      source = { kind: "image", el: img, w: img.naturalWidth, h: img.naturalHeight, dirty: true };
+      setActive("file");
+      statusTxt.textContent = f.name.toLowerCase();
+    };
+    img.src = url;
+  } else {
+    video.srcObject = null;
+    video.src = url;
+    video.play().then(() => {
+      source = { kind: "video", el: video, w: 0, h: 0 };
+      setActive("file");
+      statusTxt.textContent = f.name.toLowerCase();
+    }).catch(err => {
+      statusTxt.textContent = "could not play file";
+      console.error(err);
+    });
+  }
+}
+
+/* drag & drop */
+["dragenter", "dragover"].forEach(ev =>
+  stage.addEventListener(ev, e => { e.preventDefault(); stage.classList.add("dragging"); }));
+["dragleave", "drop"].forEach(ev =>
+  stage.addEventListener(ev, e => { e.preventDefault(); stage.classList.remove("dragging"); }));
+stage.addEventListener("drop", e => loadFile(e.dataTransfer.files[0]));
+
+/* --- camera --- */
+btns.cam.addEventListener("click", async () => {
+  try {
+    stopCam();
+    camStream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280 }, audio: false });
+    video.src = "";
+    video.srcObject = camStream;
+    await video.play();
+    source = { kind: "cam", el: video, w: 0, h: 0 };
+    setActive("cam");
+    statusTxt.textContent = "camera live";
+  } catch (err) {
+    statusTxt.textContent = "camera blocked";
+    console.error(err);
+  }
+});
+btns.demo.addEventListener("click", () => { video.srcObject = null; useDemo(); });
+
+/* ================= recording ================= */
+const recBtn = document.getElementById("recBtn");
+const recBadge = document.getElementById("recBadge");
+let recorder = null, chunks = [];
+
+recBtn.addEventListener("click", () => {
+  if (recorder && recorder.state === "recording"){
+    recorder.stop();
+    return;
+  }
+  const stream = canvas.captureStream(60);
+  const mime = MediaRecorder.isTypeSupported("video/webm;codecs=vp9")
+             ? "video/webm;codecs=vp9" : "video/webm";
+  recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 12_000_000 });
+  chunks = [];
+  recorder.ondataavailable = e => e.data.size && chunks.push(e.data);
+  recorder.onstop = () => {
+    const blob = new Blob(chunks, { type: "video/webm" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "pillgrid-" + Date.now() + ".webm";
+    a.click();
+    recBtn.textContent = "● Record clip";
+    recBtn.classList.remove("on");
+    recBadge.classList.remove("on");
+  };
+  recorder.start();
+  recBtn.textContent = "■ Stop & save";
+  recBtn.classList.add("on");
+  recBadge.classList.add("on");
+});
+
+/* ================= render loop ================= */
+const t0 = performance.now();
+let texW = 0, texH = 0;
+
+function uploadSource(t){
+  if (!source) return;
+  let el = source.el, w = source.w, h = source.h, ready = true;
+
+  if (source.kind === "demo"){
+    drawDemo(t);
+  } else if (source.kind === "video" || source.kind === "cam"){
+    ready = el.readyState >= 2 && el.videoWidth > 0;
+    w = el.videoWidth; h = el.videoHeight;
+  } else if (source.kind === "image"){
+    if (!source.dirty) return;      // static — upload once
+    source.dirty = false;
+  }
+  if (!ready) return;
+
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, el);
+  texW = w || el.width; texH = h || el.height;
+}
+
+function frame(now){
+  const t = (now - t0) / 1000;
+  uploadSource(t);
+
+  gl.uniform2f(U.uRes, canvas.width, canvas.height);
+  gl.uniform2f(U.uTexRes, texW || 1, texH || 1);
+  gl.uniform1f(U.uTime, t);
+  gl.uniform2f(U.uCell, params.uCellW * DPR, params.uCellH * DPR);
+  ["uContrast","uGamma","uExposure","uGlow","uBlack","uSoft","uVign",
+   "uFlicker","uFlickSpeed","uScan","uScanSpeed","uGrain","uSizeResp",
+   "uStagger","uJitter","uGlitch","uShape","uHoriz","uMode","uSat"]
+    .forEach(k => gl.uniform1f(U[k], params[k]));
+  gl.uniform3fv(U.uColA, tintA);
+  gl.uniform3fv(U.uColB, tintB);
+
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+  requestAnimationFrame(frame);
+}
+
+useDemo();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
