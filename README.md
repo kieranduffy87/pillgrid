@@ -22,10 +22,11 @@ python3 -m http.server 8000
 
 - **Presets** — Reference, Billboard, OLED, Broadcast, Ghost, Brutal — plus **Shuffle** for a random look that still reads well, and **Reset**
 - **Source extras** — **Mirror** (flip horizontally, handy for camera), **Contain** (fit the whole frame instead of filling; out-of-frame dots go dark)
-- **Matrix** — dot shape (pill / round / square), axis, pitch, length, size response, stagger, jitter
+- **Matrix** — nine dot shapes (pill, round, square, diamond, triangle, hexagon, cross, ring, star), axis, pitch, length, size response, stagger, jitter
 - **Signal** — contrast, gamma, exposure, black point, softness, bloom, vignette
 - **Motion** — per-dot flicker (amount + speed), scanning wave (speed sign sets direction), glitch, grain
 - **Color** — tint / duotone / true-RGB modes, saturation, six tint presets, custom dim + bright colors
+- **Templates** — save the current look (every control, color, and shape) as a named, reusable template; templates persist in the browser and can be exported/imported as a `.json` file to move between machines
 - **Playback** — click the stage (or press space) to pause/resume a loaded video; fullscreen button on the stage
 
 ### Keyboard
@@ -34,8 +35,8 @@ python3 -m http.server 8000
 
 ## Export & share
 
-- **Record clip** captures the filtered canvas at 60 fps — MP4 where the browser supports it (Safari), WebM elsewhere. Load your clip, hit record, play it through, stop.
-- **Snapshot** saves the current frame as a PNG at full canvas resolution.
+- **Record clip** captures the filtered canvas — MP4 where the browser supports it (Safari), WebM elsewhere. Choose **frame rate** (30/60), **quality** (standard/high bitrate), and a **clip length** (free, or auto-stop at 5 / 10 / 15 s). Load your clip, hit record, play it through, stop.
+- **Save still** exports the current frame as a PNG at **1×, 2×, or 4×** canvas resolution (supersampled — same dot count, more pixels per dot).
 - **Copy settings link** puts your exact look into the URL, so a filter recipe can be shared or bookmarked.
 
 ---

@@ -190,6 +190,49 @@
   }
   .seg button.active { background: var(--accent); color: #fff; }
 
+  /* shape grid */
+  .shapeGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; margin-bottom: 14px; }
+  .shp {
+    appearance: none; cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; gap: 5px;
+    padding: 9px 4px 7px;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+    color: var(--muted);
+    font-family: var(--sans); font-size: 9.5px; font-weight: 600; letter-spacing: 0.03em;
+    transition: border-color .16s, color .16s, background .16s;
+  }
+  .shp svg { width: 18px; height: 18px; display: block; }
+  .shp:hover { border-color: var(--accent); color: var(--text); }
+  .shp.active { border-color: var(--accent); color: #fff; background: rgba(3, 57, 248, 0.12); }
+  .axisRow.dim { opacity: 0.4; pointer-events: none; }
+
+  /* templates */
+  .tplForm { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-bottom: 10px; }
+  .tplForm input[type=text] {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 999px;
+    color: var(--text); font-family: var(--sans); font-size: 11px; padding: 8px 12px; min-width: 0;
+  }
+  .tplForm input[type=text]:focus { outline: none; border-color: var(--accent); }
+  .tplForm input[type=text]::placeholder { color: var(--muted); }
+  .tplList { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+  .tpl {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+    padding: 7px 8px 7px 12px;
+    transition: border-color .16s;
+  }
+  .tpl:hover { border-color: var(--accent); }
+  .tpl .name {
+    flex: 1; font-size: 11.5px; font-weight: 600; cursor: pointer;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .tpl .del {
+    appearance: none; border: none; background: transparent; cursor: pointer;
+    color: var(--muted); font-size: 16px; line-height: 1; padding: 2px 5px; border-radius: 6px;
+  }
+  .tpl .del:hover { color: var(--rec); }
+  .tplEmpty { font-size: 11px; color: var(--muted); margin-bottom: 10px; }
+
   /* sliders */
   .ctl { margin-bottom: 12px; }
   .ctl.off { opacity: 0.35; pointer-events: none; }
@@ -330,8 +373,9 @@
 
   <section>
     <h2 class="mono">Matrix</h2>
-    <div class="segRow"><span class="mono">Shape</span><div class="seg" id="segShape"></div></div>
-    <div class="segRow"><span class="mono">Axis</span><div class="seg" id="segAxis"></div></div>
+    <div class="mono" style="margin-bottom: 10px;">Shape</div>
+    <div class="shapeGrid" id="shapeGrid"></div>
+    <div class="segRow axisRow"><span class="mono">Axis</span><div class="seg" id="segAxis"></div></div>
     <div class="ctl"><label><span>Dot pitch</span><output>10</output></label>
       <input type="range" id="uCellW" min="6" max="40" step="1" value="10"></div>
     <div class="ctl"><label><span>Dot length</span><output>16</output></label>
@@ -391,13 +435,35 @@
   </section>
 
   <section>
-    <h2 class="mono">Output</h2>
-    <button class="btn rec" id="recBtn">● Record clip</button>
-    <div class="outRow">
-      <button class="btn" id="linkBtn" title="Copy a URL that reproduces these settings">Copy settings link</button>
-      <button class="btn" id="resetBtn" title="Back to the Reference preset">Reset</button>
+    <h2 class="mono">Templates</h2>
+    <div class="tplForm">
+      <input type="text" id="tplName" placeholder="Name this look…" maxlength="28">
+      <button class="btn" id="tplSave">Save</button>
     </div>
-    <p class="note">Records the filtered canvas to a video file (MP4 in Safari, WebM elsewhere). Snapshot saves a still. The settings link reproduces your exact look.</p>
+    <div class="tplList" id="tplList"></div>
+    <div class="outRow">
+      <button class="btn" id="tplExport" title="Download all templates as a .json backup">Export .json</button>
+      <button class="btn" id="tplImport" title="Load templates from a .json file">Import .json</button>
+    </div>
+    <input type="file" id="tplFile" accept="application/json,.json">
+    <p class="note">Save the current look as a reusable template — every control, color, and shape. Templates persist in this browser; export a .json to reuse them anywhere.</p>
+  </section>
+
+  <section>
+    <h2 class="mono">Output</h2>
+    <div class="segRow"><span class="mono">Frame rate</span><div class="seg" id="segFps"></div></div>
+    <div class="segRow"><span class="mono">Quality</span><div class="seg" id="segQual"></div></div>
+    <div class="segRow"><span class="mono">Clip length</span><div class="seg" id="segDur"></div></div>
+    <button class="btn rec" id="recBtn">● Record clip</button>
+    <div class="segRow" style="margin-top: 14px;"><span class="mono">Still scale</span><div class="seg" id="segScale"></div></div>
+    <div class="outRow">
+      <button class="btn" id="shotBtn2" title="Save a PNG still (S)">Save still</button>
+      <button class="btn" id="linkBtn" title="Copy a URL that reproduces these settings">Copy link</button>
+    </div>
+    <div class="outRow">
+      <button class="btn" id="resetBtn" title="Back to the Reference preset">Reset all</button>
+    </div>
+    <p class="note">Record to a video file (MP4 in Safari, WebM elsewhere) at your chosen frame rate, quality, and auto-stop length. Still saves a PNG at up to 4× resolution. The link reproduces your exact look.</p>
     <p class="keys"><b>Space</b> play/pause · <b>R</b> record · <b>S</b> snapshot · <b>F</b> fullscreen</p>
   </section>
 </aside>
@@ -424,7 +490,7 @@ uniform vec2  uCell;
 uniform float uContrast, uGamma, uExposure, uGlow, uBlack, uSoft, uVign;
 uniform float uFlicker, uFlickSpeed, uScan, uScanSpeed, uGrain, uSizeResp;
 uniform float uStagger, uJitter, uGlitch;
-uniform float uShape;   /* 0 pill, 1 round, 2 square */
+uniform float uShape;   /* 0 pill 1 round 2 square 3 diamond 4 triangle 5 hexagon 6 cross 7 ring 8 star */
 uniform float uHoriz;   /* 0 vertical, 1 horizontal  */
 uniform float uMode;    /* 0 tint, 1 duo, 2 rgb      */
 uniform float uFit;     /* 0 cover, 1 contain        */
@@ -455,6 +521,48 @@ float sdPill(vec2 p, float halfLen, float r){
 float sdRBox(vec2 p, vec2 b, float rr){
   vec2 q = abs(p) - b + rr;
   return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - rr;
+}
+
+float sdDiamond(vec2 p, float r){
+  return (abs(p.x) + abs(p.y)) - r;
+}
+
+float sdEquiTri(vec2 p, float r){
+  const float k = 1.7320508;
+  p.x = abs(p.x) - r;
+  p.y = p.y + r / k;
+  if (p.x + k * p.y > 0.0) p = vec2(p.x - k * p.y, -k * p.x - p.y) / 2.0;
+  p.x -= clamp(p.x, -2.0 * r, 0.0);
+  return -length(p) * sign(p.y);
+}
+
+float sdHexagon(vec2 p, float r){
+  const vec3 k = vec3(-0.866025404, 0.5, 0.577350269);
+  p = abs(p);
+  p -= 2.0 * min(dot(k.xy, p), 0.0) * k.xy;
+  p -= vec2(clamp(p.x, -k.z * r, k.z * r), r);
+  return length(p) * sign(p.y);
+}
+
+float sdCross(vec2 p, vec2 b, float rr){
+  p = abs(p); p = (p.y > p.x) ? p.yx : p.xy;
+  vec2 q = p - b;
+  float k = max(q.y, q.x);
+  vec2 w = (k > 0.0) ? q : vec2(b.y - p.x, -k);
+  return sign(k) * length(max(w, 0.0)) - rr;
+}
+
+float sdStar5(vec2 p, float r, float rf){
+  const vec2 k1 = vec2(0.809016994, -0.587785252);
+  const vec2 k2 = vec2(-k1.x, k1.y);
+  p.x = abs(p.x);
+  p -= 2.0 * max(dot(k1, p), 0.0) * k1;
+  p -= 2.0 * max(dot(k2, p), 0.0) * k2;
+  p.x = abs(p.x);
+  p.y -= r;
+  vec2 ba = rf * vec2(-k1.y, k1.x) - vec2(0.0, 1.0);
+  float h = clamp(dot(p, ba) / dot(ba, ba), 0.0, r);
+  return length(p - ba * h) * sign(p.y * ba.x - p.x * ba.y);
 }
 
 vec2 srcUV(vec2 center){
@@ -548,8 +656,9 @@ void main(){
       /* geometry — luminance drives dot SIZE, brightness stays fairly flat */
       vec2 p = px - center;
       float szf = mix(1.0 - uSizeResp, 1.0, smoothstep(0.0, 1.0, l));
+      float rr = min(uCell.x, uCell.y) * 0.42 * szf;
       float d;
-      if (uShape < 0.5){
+      if (uShape < 0.5){                 // pill
         if (uHoriz < 0.5){
           float r  = uCell.x * 0.34 * szf;
           float hl = max(uCell.y * 0.5 - uCell.x * 0.34 - uCell.y * 0.14, 0.0) * szf;
@@ -559,12 +668,25 @@ void main(){
           float hl = max(uCell.x * 0.5 - uCell.y * 0.34 - uCell.x * 0.14, 0.0) * szf;
           d = sdPill(p.yx, hl, r);
         }
-      } else if (uShape < 1.5){
+      } else if (uShape < 1.5){          // round
         float r = min(uCell.x, uCell.y) * 0.36 * szf;
         d = length(p) - r;
-      } else {
+      } else if (uShape < 2.5){          // square
         vec2 bb = uCell * 0.36 * szf;
         d = sdRBox(p, bb, min(2.0, min(bb.x, bb.y) * 0.4));
+      } else if (uShape < 3.5){          // diamond
+        d = sdDiamond(p, rr * 1.15);
+      } else if (uShape < 4.5){          // triangle
+        d = sdEquiTri(p, rr * 1.1);
+      } else if (uShape < 5.5){          // hexagon
+        d = sdHexagon(p, rr * 1.08);
+      } else if (uShape < 6.5){          // cross / plus
+        float a = min(uCell.x, uCell.y) * szf;
+        d = sdCross(p, vec2(a * 0.46, a * 0.16), 1.0);
+      } else if (uShape < 7.5){          // ring
+        d = abs(length(p) - rr * 0.86) - rr * 0.30;
+      } else {                           // star
+        d = sdStar5(p, rr * 1.25, 0.42);
       }
 
       float core = 1.0 - smoothstep(-0.75, 0.75, d);
@@ -697,10 +819,48 @@ function setSeg(containerId, key, i){
 }
 const satCtl = document.getElementById("satCtl");
 function updateSatState(){ satCtl.classList.toggle("off", params.uMode !== 2); }
-buildSeg("segShape", ["Pill", "Round", "Square"], "uShape");
+
+/* shape grid — nine LED dot geometries */
+const SHAPE_NAMES = ["Pill","Round","Square","Diamond","Triangle","Hexagon","Cross","Ring","Star"];
+const SHAPE_GLYPHS = [
+  '<rect x="5.5" y="1.5" width="5" height="13" rx="2.5" fill="currentColor"/>',
+  '<circle cx="8" cy="8" r="5.6" fill="currentColor"/>',
+  '<rect x="2.6" y="2.6" width="10.8" height="10.8" rx="2.4" fill="currentColor"/>',
+  '<path d="M8 1.4 14.6 8 8 14.6 1.4 8Z" fill="currentColor"/>',
+  '<path d="M8 2 14.6 13.6 1.4 13.6Z" fill="currentColor"/>',
+  '<path d="M8 1.4 14 4.7 14 11.3 8 14.6 2 11.3 2 4.7Z" fill="currentColor"/>',
+  '<path d="M6 1.6h4v4.4h4.4v4H10v4.4H6V10H1.6V6H6Z" fill="currentColor"/>',
+  '<path fill="currentColor" fill-rule="evenodd" d="M8 2.2A5.8 5.8 0 1 0 8 13.8 5.8 5.8 0 0 0 8 2.2Zm0 3.2A2.6 2.6 0 1 1 8 10.6 2.6 2.6 0 0 1 8 5.4Z"/>',
+  '<path d="M8 1.3 9.9 5.9 14.7 6.3 11 9.5 12.2 14.2 8 11.6 3.8 14.2 5 9.5 1.3 6.3 6.1 5.9Z" fill="currentColor"/>',
+];
+const shapeGrid = document.getElementById("shapeGrid");
+const axisRow = document.querySelector(".axisRow");
+function setShape(i){
+  params.uShape = i;
+  shapeGrid.querySelectorAll(".shp").forEach((x, n) => x.classList.toggle("active", n === i));
+  axisRow.classList.toggle("dim", i !== 0);   // axis only affects the pill
+}
+SHAPE_NAMES.forEach((name, i) => {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "shp" + (i === params.uShape ? " active" : "");
+  b.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true">' + SHAPE_GLYPHS[i] + '</svg><span>' + name + '</span>';
+  b.addEventListener("click", () => setShape(i));
+  shapeGrid.appendChild(b);
+});
+setShape(params.uShape);
+
 buildSeg("segAxis",  ["Vertical", "Horizontal"], "uHoriz");
 buildSeg("segMode",  ["Tint", "Duo", "RGB"], "uMode", updateSatState);
 updateSatState();
+
+/* export option segments (UI-only params, not shader uniforms) */
+const FPS_VALS = [30, 60], QUAL_VALS = [8000000, 16000000], DUR_VALS = [0, 5, 10, 15], SCALE_VALS = [1, 2, 4];
+params.uFps = 1; params.uQual = 1; params.uDur = 0; params.uScale = 1;
+buildSeg("segFps",   ["30", "60"], "uFps");
+buildSeg("segQual",  ["Standard", "High"], "uQual");
+buildSeg("segDur",   ["Free", "5s", "10s", "15s"], "uDur");
+buildSeg("segScale", ["1×", "2×", "4×"], "uScale");
 
 /* fit + mirror toggles */
 const mirrorBtn = document.getElementById("mirrorBtn");
@@ -788,7 +948,7 @@ function applyPreset(name){
   const p = PRESETS[name];
   Object.keys(p).forEach(k => {
     if (k === "tint") setTintByName(p[k]);
-    else if (k === "uShape") setSeg("segShape", "uShape", p[k]);
+    else if (k === "uShape") setShape(p[k]);
     else if (k === "uHoriz") setSeg("segAxis", "uHoriz", p[k]);
     else if (k === "uMode")  setSeg("segMode", "uMode", p[k]);
     else if (sliderEls[k])   setSlider(k, p[k]);
@@ -802,8 +962,8 @@ document.getElementById("resetBtn").addEventListener("click", () => applyPreset(
 const rnd = (a, b) => a + Math.random() * (b - a);
 const pick = arr => arr[Math.floor(Math.random() * arr.length)];
 document.getElementById("shuffleBtn").addEventListener("click", () => {
-  const shape = Math.floor(rnd(0, 3));
-  setSeg("segShape", "uShape", shape);
+  const shape = Math.floor(rnd(0, SHAPE_NAMES.length));
+  setShape(shape);
   setSeg("segAxis", "uHoriz", Math.random() < 0.3 ? 1 : 0);
   setSeg("segMode", "uMode", Math.floor(rnd(0, 3)));
   setTintByName(pick(TINTS)[0]);
@@ -829,33 +989,35 @@ document.getElementById("shuffleBtn").addEventListener("click", () => {
   presetWrap.querySelectorAll(".btn").forEach(x => x.classList.remove("active"));
 });
 
-/* ---------- shareable settings link ---------- */
-const linkBtn = document.getElementById("linkBtn");
-function stateToHash(){
+/* ---------- capture / apply a complete look ---------- */
+function currentState(){
   const s = { p: {}, a: pickA.value, b: pickB.value };
   Object.keys(params).forEach(k => s.p[k] = params[k]);
-  return btoa(JSON.stringify(s));
+  return s;
 }
+function applyState(s){
+  if (!s || !s.p) return;
+  Object.keys(s.p).forEach(k => { if (sliderEls[k]) setSlider(k, s.p[k]); });
+  if ("uShape" in s.p)  setShape(s.p.uShape);
+  if ("uHoriz" in s.p)  setSeg("segAxis", "uHoriz", s.p.uHoriz);
+  if ("uMode" in s.p)   setSeg("segMode", "uMode", s.p.uMode);
+  if ("uFit" in s.p)    setToggle(fitBtn, "uFit", s.p.uFit);
+  if ("uMirror" in s.p) setToggle(mirrorBtn, "uMirror", s.p.uMirror);
+  if (s.a && s.b){
+    pickA.value = s.a; pickB.value = s.b;
+    tintA = hex2rgb(s.a); tintB = hex2rgb(s.b);
+    tintWrap.querySelectorAll(".tint").forEach(x => x.classList.remove("active"));
+  }
+  presetWrap.querySelectorAll(".btn").forEach(x => x.classList.remove("active"));
+}
+
+/* ---------- shareable settings link ---------- */
+const linkBtn = document.getElementById("linkBtn");
+function stateToHash(){ return btoa(JSON.stringify(currentState())); }
 function applyHash(){
   if (!location.hash || location.hash.length < 2) return;
-  try {
-    const s = JSON.parse(atob(location.hash.slice(1)));
-    if (!s || !s.p) return;
-    Object.keys(s.p).forEach(k => {
-      if (sliderEls[k]) setSlider(k, s.p[k]);
-    });
-    if ("uShape" in s.p) setSeg("segShape", "uShape", s.p.uShape);
-    if ("uHoriz" in s.p) setSeg("segAxis", "uHoriz", s.p.uHoriz);
-    if ("uMode" in s.p)  setSeg("segMode", "uMode", s.p.uMode);
-    if ("uFit" in s.p)    setToggle(fitBtn, "uFit", s.p.uFit);
-    if ("uMirror" in s.p) setToggle(mirrorBtn, "uMirror", s.p.uMirror);
-    if (s.a && s.b){
-      pickA.value = s.a; pickB.value = s.b;
-      tintA = hex2rgb(s.a); tintB = hex2rgb(s.b);
-      tintWrap.querySelectorAll(".tint").forEach(x => x.classList.remove("active"));
-    }
-    presetWrap.querySelectorAll(".btn").forEach(x => x.classList.remove("active"));
-  } catch (e) { /* malformed hash: ignore */ }
+  try { applyState(JSON.parse(atob(location.hash.slice(1)))); }
+  catch (e) { /* malformed hash: ignore */ }
 }
 linkBtn.addEventListener("click", () => {
   const url = location.origin + location.pathname + "#" + stateToHash();
@@ -868,6 +1030,84 @@ linkBtn.addEventListener("click", () => {
     navigator.clipboard.writeText(url).then(() => done(true), () => done(false));
   else done(false);
 });
+
+/* ---------- templates: save a look, reuse it forever ---------- */
+const TPL_KEY = "pillgrid.templates.v1";
+const tplName = document.getElementById("tplName");
+const tplList = document.getElementById("tplList");
+const tplFile = document.getElementById("tplFile");
+let templates = loadTemplates();
+function loadTemplates(){ try { return JSON.parse(localStorage.getItem(TPL_KEY)) || {}; } catch (e) { return {}; } }
+function persistTemplates(){ try { localStorage.setItem(TPL_KEY, JSON.stringify(templates)); } catch (e) {} }
+function renderTemplates(){
+  tplList.innerHTML = "";
+  const names = Object.keys(templates);
+  if (!names.length){
+    tplList.innerHTML = '<div class="tplEmpty">No saved templates yet.</div>';
+    return;
+  }
+  names.forEach(name => {
+    const row = document.createElement("div");
+    row.className = "tpl";
+    const nm = document.createElement("div");
+    nm.className = "name";
+    nm.textContent = name;
+    nm.title = "Apply “" + name + "”";
+    nm.addEventListener("click", () => {
+      applyState(templates[name]);
+      row.style.borderColor = "var(--accent)";
+      setTimeout(() => row.style.borderColor = "", 350);
+    });
+    const del = document.createElement("button");
+    del.className = "del";
+    del.textContent = "×";
+    del.title = "Delete";
+    del.addEventListener("click", e => {
+      e.stopPropagation();
+      delete templates[name];
+      persistTemplates();
+      renderTemplates();
+    });
+    row.appendChild(nm);
+    row.appendChild(del);
+    tplList.appendChild(row);
+  });
+}
+function saveTemplate(){
+  let name = (tplName.value || "").trim();
+  if (!name){ let n = 1; while (templates["Template " + n]) n++; name = "Template " + n; }
+  templates[name] = currentState();
+  persistTemplates();
+  renderTemplates();
+  tplName.value = "";
+}
+document.getElementById("tplSave").addEventListener("click", saveTemplate);
+tplName.addEventListener("keydown", e => { if (e.key === "Enter") saveTemplate(); });
+document.getElementById("tplExport").addEventListener("click", () => {
+  const blob = new Blob([JSON.stringify(templates, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "pillgrid-templates.json";
+  a.click();
+});
+document.getElementById("tplImport").addEventListener("click", () => tplFile.click());
+tplFile.addEventListener("change", () => {
+  const f = tplFile.files[0];
+  if (!f) return;
+  const rd = new FileReader();
+  rd.onload = () => {
+    try {
+      const obj = JSON.parse(rd.result);
+      if (obj && typeof obj === "object")
+        Object.keys(obj).forEach(k => { if (obj[k] && obj[k].p) templates[k] = obj[k]; });
+      persistTemplates();
+      renderTemplates();
+    } catch (e) { /* ignore bad file */ }
+    tplFile.value = "";
+  };
+  rd.readAsText(f);
+});
+renderTemplates();
 
 /* ================= sources ================= */
 const statusTxt = document.getElementById("statusTxt");
@@ -998,16 +1238,21 @@ const REC_MIMES = ["video/mp4;codecs=avc1", "video/mp4", "video/webm;codecs=vp9"
 const recMime = (window.MediaRecorder && REC_MIMES.find(m => MediaRecorder.isTypeSupported(m))) || "video/webm";
 const recExt = recMime.startsWith("video/mp4") ? "mp4" : "webm";
 
+let recTimer = null;
 function toggleRecord(){
   if (recorder && recorder.state === "recording"){
     recorder.stop();
     return;
   }
-  const stream = canvas.captureStream(60);
-  recorder = new MediaRecorder(stream, { mimeType: recMime, videoBitsPerSecond: 12_000_000 });
+  const fps = FPS_VALS[params.uFps] || 60;
+  const bitrate = QUAL_VALS[params.uQual] || 12000000;
+  const dur = DUR_VALS[params.uDur] || 0;
+  const stream = canvas.captureStream(fps);
+  recorder = new MediaRecorder(stream, { mimeType: recMime, videoBitsPerSecond: bitrate });
   chunks = [];
   recorder.ondataavailable = e => e.data.size && chunks.push(e.data);
   recorder.onstop = () => {
+    if (recTimer){ clearTimeout(recTimer); recTimer = null; }
     const blob = new Blob(chunks, { type: recMime.split(";")[0] });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
@@ -1021,13 +1266,27 @@ function toggleRecord(){
   recBtn.textContent = "■ Stop & save";
   recBtn.classList.add("on");
   recBadge.classList.add("on");
+  if (dur > 0)
+    recTimer = setTimeout(() => {
+      if (recorder && recorder.state === "recording") recorder.stop();
+    }, dur * 1000);
 }
 recBtn.addEventListener("click", toggleRecord);
 
-/* ---------- snapshot ---------- */
+/* ---------- snapshot (supersampled up to 4×) ---------- */
 let wantShot = false;
-document.getElementById("shotBtn").addEventListener("click", () => wantShot = true);
+const reqShot = () => wantShot = true;
+document.getElementById("shotBtn").addEventListener("click", reqShot);
+document.getElementById("shotBtn2").addEventListener("click", reqShot);
 function saveShot(){
+  const s = SCALE_VALS[params.uScale] || 1;
+  const ow = canvas.width, oh = canvas.height;
+  if (s !== 1){
+    canvas.width = Math.round(ow * s);
+    canvas.height = Math.round(oh * s);
+    gl.viewport(0, 0, canvas.width, canvas.height);
+  }
+  drawScene(s);   /* cellScale = s keeps the dot count constant, more pixels per dot */
   const w = canvas.width, h = canvas.height;
   const px = new Uint8Array(w * h * 4);
   gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px);
@@ -1044,6 +1303,10 @@ function saveShot(){
     a.download = "pillgrid-" + Date.now() + ".png";
     a.click();
   }, "image/png");
+  if (s !== 1){
+    canvas.width = ow; canvas.height = oh;
+    gl.viewport(0, 0, ow, oh);
+  }
 }
 
 /* ---------- play / pause ---------- */
@@ -1103,14 +1366,12 @@ function uploadSource(t){
   texW = w || el.width; texH = h || el.height;
 }
 
-function frame(now){
-  const t = (now - t0) / 1000;
-  uploadSource(t);
-
+let curT = 0;
+function drawScene(cellScale){
   gl.uniform2f(U.uRes, canvas.width, canvas.height);
   gl.uniform2f(U.uTexRes, texW || 1, texH || 1);
-  gl.uniform1f(U.uTime, t);
-  gl.uniform2f(U.uCell, params.uCellW * DPR, params.uCellH * DPR);
+  gl.uniform1f(U.uTime, curT);
+  gl.uniform2f(U.uCell, params.uCellW * DPR * cellScale, params.uCellH * DPR * cellScale);
   ["uContrast","uGamma","uExposure","uGlow","uBlack","uSoft","uVign",
    "uFlicker","uFlickSpeed","uScan","uScanSpeed","uGrain","uSizeResp",
    "uStagger","uJitter","uGlitch","uShape","uHoriz","uMode","uSat",
@@ -1118,8 +1379,13 @@ function frame(now){
     .forEach(k => gl.uniform1f(U[k], params[k]));
   gl.uniform3fv(U.uColA, tintA);
   gl.uniform3fv(U.uColB, tintB);
-
   gl.drawArrays(gl.TRIANGLES, 0, 3);
+}
+
+function frame(now){
+  curT = (now - t0) / 1000;
+  uploadSource(curT);
+  drawScene(1);
   if (wantShot){ wantShot = false; saveShot(); }
   requestAnimationFrame(frame);
 }
